@@ -20,6 +20,7 @@ DOCTOR = SCRIPTS / "project-doctor.py"
 RUN_BUILD = SCRIPTS / "run-build.sh"
 VERIFY = SCRIPTS / "verify-artifacts.py"
 DEX_AUDIT = SCRIPTS / "dex-audit.py"
+REUSABLE_WORKFLOW = ROOT / ".github" / "workflows" / "reusable-android-harness.yml"
 
 
 def write(path: Path, content: str | bytes) -> None:
@@ -420,6 +421,17 @@ class BuildRunnerTests(unittest.TestCase):
             self.assertIn(("test", "failed"), results)
             self.assertIn(("assemble", "success"), results)
             self.assertEqual(summary["status"], "failed")
+
+
+class WorkflowContractTests(unittest.TestCase):
+    def test_package_upload_uses_only_verified_staging_without_duplicates(self) -> None:
+        workflow = REUSABLE_WORKFLOW.read_text(encoding="utf-8")
+        upload_block = workflow.split("- name: Upload verified Android packages", 1)[1].split(
+            "- name: Upload reports and logs", 1
+        )[0]
+        self.assertIn("android-harness-output/artifacts/**/*.apk", upload_block)
+        self.assertIn("android-harness-output/artifacts/**/*.aab", upload_block)
+        self.assertNotIn("target/**/build/outputs", upload_block)
 
 
 if __name__ == "__main__":
