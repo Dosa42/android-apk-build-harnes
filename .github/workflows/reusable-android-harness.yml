@@ -1,0 +1,192 @@
+name: Reusable Android APK Build Harness
+
+on:
+  workflow_call:
+    inputs:
+      target_repository:
+        description: Target Android repository in owner/repository form
+        required: true
+        type: string
+      target_ref:
+        description: Branch, tag, or commit; blank resolves the target default branch
+        required: false
+        default: ''
+        type: string
+      variant:
+        description: APK variant to build (debug, release, or both)
+        required: false
+        default: debug
+        type: string
+      dex_audit:
+        description: Run the Samsung DeX compatibility audit
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      TARGET_REPO_TOKEN:
+        description: Optional token with read access to a private target repository
+        required: false
+      ANDROID_RELEASE_KEYSTORE_BASE64:
+        description: Optional base64-encoded release keystore
+        required: false
+      ANDROID_RELEASE_STORE_PASSWORD:
+        description: Optional release keystore password
+        required: false
+      ANDROID_RELEASE_KEY_PASSWORD:
+        description: Optional release key password
+        required: false
+      ANDROID_RELEASE_KEY_ALIAS:
+        description: Optional release key alias
+        required: false
+    outputs:
+      apk_artifact_name:
+        description: Name of the uploaded APK artifact
+        value: ${{ jobs.android-build.outputs.apk-artifact-name }}
+      diagnostics_artifact_name:
+        description: Name of the uploaded reports and logs artifact
+        value: ${{ jobs.android-build.outputs.diagnostics-artifact-name }}
+      artifact_manifest:
+        description: Path to the generated artifact manifest, when available
+        value: ${{ jobs.android-build.outputs.artifact-manifest }}
+      dex_report:
+        description: Path to the Samsung DeX audit report, when available
+        value: ${{ jobs.android-build.outputs.dex-report }}
+
+permissions:
+  contents: read
+
+jobs:
+  android-build:
+    name: Build ${{ inputs.target_repository }} (${{ inputs.variant }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      apk-artifact-name: ${{ steps.names.outputs.apk-artifact-name }}
+      diagnostics-artifact-name: ${{ steps.names.outputs.diagnostics-artifact-name }}
+      artifact-manifest: ${{ steps.harness.outputs.artifact-manifest }}
+      dex-report: ${{ steps.harness.outputs.dex-report }}
+    steps:
+      - name: Validate request and derive artifact names
+        id: names
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ inputs.target_repository }}
+          TARGET_VARIANT: ${{ inputs.variant }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${TARGET_REPOSITORY}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "target_repository must use owner/repository form." >&2
+            exit 2
+          fi
+
+          case "${TARGET_VARIANT}" in
+            debug|release|both) ;;
+            *)
+              echo "variant must be debug, release, or both." >&2
+              exit 2
+              ;;
+          esac
+
+          repository_slug="${TARGET_REPOSITORY//\//-}"
+          artifact_prefix="${repository_slug}-${TARGET_VARIANT}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "apk-artifact-name=${artifact_prefix}-apks" >> "${GITHUB_OUTPUT}"
+          echo "diagnostics-artifact-name=${artifact_prefix}-reports-and-logs" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout build harness
+        uses: actions/checkout@v7
+        with:
+          repository: Dosa42/android-apk-build-harnes
+          ref: main
+          path: harness
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Checkout target repository read-only
+        id: target-checkout
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.target_repository }}
+          ref: ${{ inputs.target_ref }}
+          token: ${{ secrets.TARGET_REPO_TOKEN || github.token }}
+          path: target
+          persist-credentials: false
+          fetch-depth: 1
+          lfs: true
+          submodules: recursive
+
+      - name: Run Android build harness
+        id: harness
+        uses: ./harness/.github/actions/android-build-harness
+        with:
+          target-path: target
+          variant: ${{ inputs.variant }}
+          run-tests: 'true'
+          run-lint: 'true'
+          dex-audit: ${{ inputs.dex_audit }}
+          output-directory: android-harness-output
+          java-distribution: temurin
+          release-keystore-base64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          release-store-password: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          release-key-password: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          release-key-alias: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS || 'upload' }}
+
+      - name: Add build result to the run summary
+        if: ${{ always() }}
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ inputs.target_repository }}
+          TARGET_REF_INPUT: ${{ inputs.target_ref }}
+          TARGET_VARIANT: ${{ inputs.variant }}
+          TARGET_COMMIT: ${{ steps.target-checkout.outputs.commit }}
+          HARNESS_OUTCOME: ${{ steps.harness.outcome }}
+        run: |
+          set -euo pipefail
+          {
+            echo '## Android APK build harness'
+            echo
+            echo "- Target: \`${TARGET_REPOSITORY}\`"
+            if [[ -n "${TARGET_REF_INPUT}" ]]; then
+              echo "- Requested ref: \`${TARGET_REF_INPUT}\`"
+            else
+              echo '- Requested ref: target default branch'
+            fi
+            if [[ -n "${TARGET_COMMIT}" ]]; then
+              echo "- Checked-out commit: \`${TARGET_COMMIT}\`"
+            fi
+            echo "- Variant: \`${TARGET_VARIANT}\`"
+            echo "- Harness step: \`${HARNESS_OUTCOME:-not-run}\`"
+            if [[ -f android-harness-output/reports/build-summary.md ]]; then
+              echo
+              cat android-harness-output/reports/build-summary.md
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload APKs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.names.outputs.apk-artifact-name }}
+          path: |
+            android-harness-output/artifacts/**/*.apk
+            target/**/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload reports and logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.names.outputs.diagnostics-artifact-name }}
+          path: |
+            android-harness-output/reports/**
+            android-harness-output/logs/**
+            target/**/build/reports/**
+            target/**/build/test-results/**
+            target/**/build/outputs/logs/**
+          if-no-files-found: warn
+          compression-level: 6
+          retention-days: 30

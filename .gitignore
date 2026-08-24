@@ -6,6 +6,10 @@ __pycache__/
 # Ephemeral target checkouts and workflow output.
 target-workspace/
 harness-output/
+android-harness-output/
+
+# Local command/evidence journal can contain machine-specific paths.
+android-engineer-log/
 
 # Local editor and OS files.
 .idea/

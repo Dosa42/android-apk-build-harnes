@@ -1,0 +1,125 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_repository:
+        description: Target Android repository (owner/repository)
+        required: true
+        default: Dosa42/Apk-builder-app
+        type: string
+      target_ref:
+        description: Branch, tag, or commit (blank uses the default branch)
+        required: false
+        default: ''
+        type: string
+      variant:
+        description: APK variant to build
+        required: true
+        default: debug
+        type: choice
+        options:
+          - debug
+          - release
+          - both
+      dex_audit:
+        description: Run the Samsung DeX compatibility audit
+        required: true
+        default: true
+        type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/actions/**'
+      - '.github/workflows/**'
+      - 'scripts/**'
+      - 'tests/**'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-harness:
+    name: Validate harness sources
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout harness
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Parse workflow and action YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' yaml_files < <(
+            find .github -type f \( -name '*.yml' -o -name '*.yaml' \) -print0
+          )
+          if (( ${#yaml_files[@]} == 0 )); then
+            echo 'No workflow or action YAML files were found.' >&2
+            exit 1
+          fi
+          ruby -e '
+            require "yaml"
+            ARGV.each do |file|
+              abort("Empty YAML document: #{file}") unless YAML.parse_file(file)
+              puts "Valid YAML: #{file}"
+            end
+          ' "${yaml_files[@]}"
+
+      - name: Check shell script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' script; do
+            echo "Checking ${script}"
+            bash -n "${script}"
+          done < <(find . -type f -name '*.sh' -not -path './.git/*' -print0)
+
+      - name: Check Python script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for python_root in scripts .github/actions/android-build-harness/scripts; do
+            if [[ -d "${python_root}" ]]; then
+              python3 -m compileall -q "${python_root}"
+            fi
+          done
+
+      - name: Run harness regression tests
+        shell: bash
+        run: python3 -m unittest discover -s tests -v
+
+  build-target:
+    name: Build requested Android repository
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-android-harness.yml
+    with:
+      target_repository: ${{ inputs.target_repository }}
+      target_ref: ${{ inputs.target_ref }}
+      variant: ${{ inputs.variant }}
+      dex_audit: ${{ inputs.dex_audit }}
+    secrets:
+      TARGET_REPO_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+      ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+      ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+      ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+      ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+
+  smoke-build-default-target:
+    name: Smoke-build default Android target
+    if: ${{ github.event_name == 'push' }}
+    needs: validate-harness
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-android-harness.yml
+    with:
+      target_repository: Dosa42/Apk-builder-app
+      target_ref: main
+      variant: debug
+      dex_audit: true
