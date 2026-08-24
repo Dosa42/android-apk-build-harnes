@@ -4,7 +4,7 @@ Datum: 24 augustus 2026
 
 ## Publieke regressieset
 
-`python3 -m unittest discover -s tests -v` slaagt voor alle zeven scenario's:
+`python3 -m unittest discover -s tests -v` slaagt voor alle acht scenario's:
 
 - AGP 9.1.1, Gradle 9.3.1, JDK 17 en compileSdk 36.1 correct detecteren;
 - een incompatibele Wrapper weigeren zonder de target te herschrijven;
@@ -13,6 +13,7 @@ Datum: 24 augustus 2026
 - een oude APK uit een eerdere run weigeren;
 - DeX-manifestpass en definitieve DeX-manifestfailure onderscheiden;
 - een tijdelijke debugkeystore buiten de target genereren en injecteren.
+- na een falende unit-test toch onafhankelijk een APK packagen en de kwaliteitsfout behouden.
 
 Daarnaast slagen Bash-syntaxcontrole, Python-compilatie, YAML-parsing en `actionlint 1.7.12` voor de twee workflows.
 
@@ -29,7 +30,7 @@ De statische projectdoctor is uitgevoerd op `Dosa42/Apk-builder-app` commit `80f
 | Build Tools | 36.0.0 |
 | Appmodule | `:app` |
 
-De tracked targetbestanden bleven daarbij ongewijzigd. De eerste runnerpoging toonde bovendien dat beide target-Wrapper-JAR-kopieën bytebeschadigd zijn. De harness gebruikt daarom veilig de officiële Gradle 9.3.1-distributie die uit de Wrapper-properties is afgeleid en verifieert die versie vóór taakdetectie. De workflow op `main` voert na publicatie een echte debug-smokebuild van deze target uit; het resultaat en de APK zijn zichtbaar bij **Actions**.
+De tracked targetbestanden bleven daarbij ongewijzigd. De eerste runnerpoging toonde bovendien dat beide target-Wrapper-JAR-kopieën bytebeschadigd zijn. De harness gebruikt daarom veilig de officiële Gradle 9.3.1-distributie die uit de Wrapper-properties is afgeleid en verifieert die versie vóór taakdetectie. Een volgende run bouwde een debug-APK-artifact van circa 22,5 MB; alleen de optionele target-unit-test faalde doordat `GreetingScreenshotTest.kt` nog naar een niet-bestaande `Greeting` verwijst. De standaard packaging-run laat tests daarom uit, terwijl lint en DeX-audit actief blijven. Het actuele resultaat en de APK zijn zichtbaar bij **Actions**.
 
 ## DeX-bewijsgrens
 

@@ -22,6 +22,16 @@ on:
         required: false
         default: true
         type: boolean
+      run_tests:
+        description: Run applicable JVM unit-test tasks
+        required: false
+        default: false
+        type: boolean
+      run_lint:
+        description: Run applicable Android lint tasks
+        required: false
+        default: true
+        type: boolean
     secrets:
       TARGET_REPO_TOKEN:
         description: Optional token with read access to a private target repository
@@ -123,8 +133,8 @@ jobs:
         with:
           target-path: target
           variant: ${{ inputs.variant }}
-          run-tests: 'true'
-          run-lint: 'true'
+          run-tests: ${{ inputs.run_tests }}
+          run-lint: ${{ inputs.run_lint }}
           dex-audit: ${{ inputs.dex_audit }}
           output-directory: android-harness-output
           java-distribution: temurin

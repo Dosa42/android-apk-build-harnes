@@ -355,6 +355,72 @@ class BuildRunnerTests(unittest.TestCase):
             self.assertEqual(summary["status"], "success")
             self.assertEqual(summary["debug_signing_preflight"], "generated_ready")
 
+    @unittest.skipUnless(shutil.which("keytool"), "JDK keytool is required for the signing fixture")
+    def test_failed_unit_test_does_not_hide_successful_apk_packaging(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            project = base / "target"
+            output = base / "out"
+            trusted_gradle = base / "tools" / "gradle"
+            project.mkdir()
+            write(
+                trusted_gradle,
+                r"""
+                #!/usr/bin/env bash
+                set -euo pipefail
+                for argument in "$@"; do
+                  case "$argument" in
+                    tasks)
+                      printf '%s\n' \
+                        ':app:assembleDebug - Assemble debug APK' \
+                        ':app:testDebugUnitTest - Run debug tests'
+                      exit 0
+                      ;;
+                    :app:testDebugUnitTest)
+                      echo 'fixture unit-test compilation failed'
+                      exit 9
+                      ;;
+                    :app:assembleDebug)
+                      python3 - "${PWD}/app/build/outputs/apk/debug/app-debug.apk" <<'PY'
+                import pathlib, sys, zipfile
+                target = pathlib.Path(sys.argv[1])
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zipfile.ZipFile(target, "w") as archive:
+                    archive.writestr("AndroidManifest.xml", b"fixture")
+                    archive.writestr("classes.dex", b"dex fixture")
+                PY
+                      exit 0
+                      ;;
+                  esac
+                done
+                exit 0
+                """,
+            )
+            trusted_gradle.chmod(0o755)
+            result = run(
+                [
+                    "bash",
+                    str(RUN_BUILD),
+                    "--project",
+                    str(project),
+                    "--variant",
+                    "debug",
+                    "--output-dir",
+                    str(output),
+                    "--run-tests",
+                    "--skip-lint",
+                ],
+                env={**os.environ, "HARNESS_GRADLE_COMMAND": str(trusted_gradle)},
+            )
+            self.assertEqual(result.returncode, 1, result.stdout)
+            apk = project / "app/build/outputs/apk/debug/app-debug.apk"
+            self.assertTrue(apk.is_file())
+            summary = json.loads((output / "reports/build-summary.json").read_text(encoding="utf-8"))
+            results = {(item["phase"], item["status"]) for item in summary["task_results"]}
+            self.assertIn(("test", "failed"), results)
+            self.assertIn(("assemble", "success"), results)
+            self.assertEqual(summary["status"], "failed")
+
 
 if __name__ == "__main__":
     unittest.main()

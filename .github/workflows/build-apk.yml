@@ -27,6 +27,16 @@ on:
         required: true
         default: true
         type: boolean
+      run_tests:
+        description: Run discovered JVM unit tests (can fail independently of APK packaging)
+        required: true
+        default: false
+        type: boolean
+      run_lint:
+        description: Run discovered Android lint tasks
+        required: true
+        default: true
+        type: boolean
   push:
     branches:
       - main
@@ -104,6 +114,8 @@ jobs:
       target_ref: ${{ inputs.target_ref }}
       variant: ${{ inputs.variant }}
       dex_audit: ${{ inputs.dex_audit }}
+      run_tests: ${{ inputs.run_tests }}
+      run_lint: ${{ inputs.run_lint }}
     secrets:
       TARGET_REPO_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
       ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
@@ -123,3 +135,5 @@ jobs:
       target_ref: main
       variant: debug
       dex_audit: true
+      run_tests: false
+      run_lint: true

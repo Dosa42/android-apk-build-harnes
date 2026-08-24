@@ -7,11 +7,13 @@ Een zelfstandige GitHub Actions-harness die een Android-repository uitleest, de 
 ## Snelste gebruik
 
 1. Open **Actions** > **Build Android APK** > **Run workflow**.
-2. Laat de standaardwaarden staan voor een debugbuild van `Dosa42/Apk-builder-app`, of vul een andere `owner/repository` in.
+2. Laat de standaardwaarden staan voor een debugbuild van `Dosa42/Apk-builder-app`, of vul een andere `owner/repository` in. Unit-tests staan standaard uit; lint en DeX-audit staan aan.
 3. Klik **Run workflow**.
 4. Download na afloop het `*-apks`-artifact onderaan de workflow-run. Het `*-reports-and-logs`-artifact bevat de diagnose, test-, lint-, signing-, artifact- en DeX-rapporten.
 
 De standaarddebugbuild heeft geen signingsecret nodig. De harness maakt een tijdelijke standaard-debugkeystore buiten de target-checkout en verwijdert die na de run.
+
+Tests zijn bewust een aparte schakelaar: een app met verouderde of kapotte testbron kan zo nog steeds een APK opleveren. Als je **Run tests** inschakelt, worden testfouten wel als workflowfout gerapporteerd, maar assemble, artifactcontrole en upload blijven doorgaan.
 
 ## Wat automatisch wordt bepaald
 
@@ -69,6 +71,8 @@ jobs:
       target_ref: main
       variant: debug
       dex_audit: true
+      run_tests: false
+      run_lint: true
     secrets: inherit
 ```
 

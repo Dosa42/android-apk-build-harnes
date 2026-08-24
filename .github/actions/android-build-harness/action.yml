@@ -296,6 +296,7 @@ runs:
 
     - name: Build, test, and lint selected variants
       id: build
+      continue-on-error: true
       shell: bash
       env:
         ANDROID_RELEASE_KEYSTORE_BASE64: ${{ inputs.release-keystore-base64 }}
@@ -335,6 +336,7 @@ runs:
 
     - name: Verify current-run Android artifacts
       id: verify
+      continue-on-error: true
       shell: bash
       run: |
         set -Eeuo pipefail
@@ -357,6 +359,7 @@ runs:
     - name: Audit Samsung DeX compatibility
       id: dex
       if: ${{ inputs.dex-audit == 'true' }}
+      continue-on-error: true
       shell: bash
       run: |
         set -Eeuo pipefail
@@ -368,3 +371,25 @@ runs:
           --markdown-report "$HARNESS_REPORT_DIR/dex-audit.md"
         [[ -s "$report" ]] || { echo "::error title=Missing DeX report::$report was not produced"; exit 2; }
         echo "dex-report=$report" >>"$GITHUB_OUTPUT"
+
+    - name: Enforce requested build, artifact, and DeX results
+      if: ${{ always() }}
+      shell: bash
+      env:
+        BUILD_OUTCOME: ${{ steps.build.outcome }}
+        VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        DEX_OUTCOME: ${{ steps.dex.outcome }}
+        DEX_REQUESTED: ${{ inputs.dex-audit }}
+      run: |
+        set -Eeuo pipefail
+        failures=()
+        [[ "$BUILD_OUTCOME" == success ]] || failures+=("build/test/lint step: $BUILD_OUTCOME")
+        [[ "$VERIFY_OUTCOME" == success ]] || failures+=("artifact verification: $VERIFY_OUTCOME")
+        if [[ "$DEX_REQUESTED" == true && "$DEX_OUTCOME" != success ]]; then
+          failures+=("Samsung DeX audit: $DEX_OUTCOME")
+        fi
+        if (( ${#failures[@]} )); then
+          printf '::error title=Android harness result::%s\n' "$(IFS='; '; echo "${failures[*]}")"
+          exit 1
+        fi
+        echo "Build, current-run artifact verification, and requested DeX audit all passed."
