@@ -4,7 +4,7 @@ Datum: 24 augustus 2026
 
 ## Publieke regressieset
 
-`python3 -m unittest discover -s tests -v` slaagt voor alle acht scenario's:
+`python3 -m unittest discover -s tests -v` slaagt voor alle negen scenario's:
 
 - AGP 9.1.1, Gradle 9.3.1, JDK 17 en compileSdk 36.1 correct detecteren;
 - een incompatibele Wrapper weigeren zonder de target te herschrijven;
@@ -14,6 +14,7 @@ Datum: 24 augustus 2026
 - DeX-manifestpass en definitieve DeX-manifestfailure onderscheiden;
 - een tijdelijke debugkeystore buiten de target genereren en injecteren.
 - na een falende unit-test toch onafhankelijk een APK packagen en de kwaliteitsfout behouden.
+- uitsluitend geverifieerde staging-APK/AAB-bestanden uploaden, zonder een dubbele kopie uit de target-buildmap.
 
 Daarnaast slagen Bash-syntaxcontrole, Python-compilatie, YAML-parsing en `actionlint 1.7.12` voor de twee workflows.
 
