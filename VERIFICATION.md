@@ -4,7 +4,7 @@ Datum: 24 augustus 2026
 
 ## Publieke regressieset
 
-`python3 -m unittest discover -s tests -v` slaagt voor alle negen scenario's:
+`python3 -m unittest discover -s tests -v` slaagt voor alle tien scenario's:
 
 - AGP 9.1.1, Gradle 9.3.1, JDK 17 en compileSdk 36.1 correct detecteren;
 - een incompatibele Wrapper weigeren zonder de target te herschrijven;
@@ -15,10 +15,11 @@ Datum: 24 augustus 2026
 - een tijdelijke debugkeystore buiten de target genereren en injecteren.
 - na een falende unit-test toch onafhankelijk een APK packagen en de kwaliteitsfout behouden.
 - uitsluitend geverifieerde staging-APK/AAB-bestanden uploaden, zonder een dubbele kopie uit de target-buildmap.
+- de push-smokematrix bevat zowel `Dosa42/Apk-builder-app` als `Dosa42/voice-to-melodiSHEET` en stopt de andere target niet wanneer één matrixjob faalt.
 
 Daarnaast slagen Bash-syntaxcontrole, Python-compilatie, YAML-parsing en `actionlint 1.7.12` voor de twee workflows.
 
-## Eerste echte target
+## Echte targets
 
 De statische projectdoctor is uitgevoerd op `Dosa42/Apk-builder-app` commit `80f14a2a7a74567b8e8228ccded28953316b8909` en bepaalde:
 

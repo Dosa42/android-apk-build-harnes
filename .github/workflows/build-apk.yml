@@ -123,15 +123,21 @@ jobs:
       ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
       ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
 
-  smoke-build-default-target:
-    name: Smoke-build default Android target
+  smoke-build-known-targets:
+    name: Smoke-build known Android targets
     if: ${{ github.event_name == 'push' }}
     needs: validate-harness
+    strategy:
+      fail-fast: false
+      matrix:
+        target_repository:
+          - Dosa42/Apk-builder-app
+          - Dosa42/voice-to-melodiSHEET
     permissions:
       contents: read
     uses: ./.github/workflows/reusable-android-harness.yml
     with:
-      target_repository: Dosa42/Apk-builder-app
+      target_repository: ${{ matrix.target_repository }}
       target_ref: main
       variant: debug
       dex_audit: true

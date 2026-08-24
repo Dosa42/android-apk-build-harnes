@@ -20,6 +20,7 @@ DOCTOR = SCRIPTS / "project-doctor.py"
 RUN_BUILD = SCRIPTS / "run-build.sh"
 VERIFY = SCRIPTS / "verify-artifacts.py"
 DEX_AUDIT = SCRIPTS / "dex-audit.py"
+ENTRY_WORKFLOW = ROOT / ".github" / "workflows" / "build-apk.yml"
 REUSABLE_WORKFLOW = ROOT / ".github" / "workflows" / "reusable-android-harness.yml"
 
 
@@ -424,6 +425,14 @@ class BuildRunnerTests(unittest.TestCase):
 
 
 class WorkflowContractTests(unittest.TestCase):
+    def test_push_smoke_matrix_covers_both_real_android_targets(self) -> None:
+        workflow = ENTRY_WORKFLOW.read_text(encoding="utf-8")
+        smoke_block = workflow.split("smoke-build-known-targets:", 1)[1]
+        self.assertIn("fail-fast: false", smoke_block)
+        self.assertIn("- Dosa42/Apk-builder-app", smoke_block)
+        self.assertIn("- Dosa42/voice-to-melodiSHEET", smoke_block)
+        self.assertIn("target_repository: ${{ matrix.target_repository }}", smoke_block)
+
     def test_package_upload_uses_only_verified_staging_without_duplicates(self) -> None:
         workflow = REUSABLE_WORKFLOW.read_text(encoding="utf-8")
         upload_block = workflow.split("- name: Upload verified Android packages", 1)[1].split(

@@ -88,7 +88,7 @@ Elke run bewaart onder `android-harness-output`:
 
 Een oude APK uit een cache of eerdere build wordt niet als nieuw resultaat geaccepteerd. De herhaalbare succes- en foutfixtures staan in `tests/`; een lokaal commandolog met machinepaden wordt bewust niet openbaar gecommit.
 
-Bij wijzigingen aan de harness op `main` draait na de bron- en regressietests automatisch een echte debug-smokebuild van `Dosa42/Apk-builder-app`. Zo wordt niet alleen de YAML, maar ook de volledige Android-buildketen bewaakt.
+Bij wijzigingen aan de harness op `main` draait na de bron- en regressietests automatisch een parallelle echte debug-smokebuild van `Dosa42/Apk-builder-app` en `Dosa42/voice-to-melodiSHEET`. Zo worden niet alleen de YAML, maar ook beide volledige Android-buildketens bewaakt.
 
 ## Lokale broncontrole
 
