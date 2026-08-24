@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Ephemeral target checkouts and workflow output.
+target-workspace/
+harness-output/
+
+# Local editor and OS files.
+.idea/
+.vscode/
+.DS_Store
