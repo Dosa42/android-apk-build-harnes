@@ -347,7 +347,7 @@ class BuildRunnerTests(unittest.TestCase):
                     "--skip-tests",
                     "--skip-lint",
                 ],
-                env={**os.environ, "ANDROID_HARNESS_GRADLE_COMMAND": str(project / "gradlew")},
+                env={**os.environ, "HARNESS_GRADLE_COMMAND": str(project / "gradlew")},
             )
             self.assertEqual(result.returncode, 0, result.stdout)
             self.assertFalse((project / "debug.keystore").exists())
