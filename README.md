@@ -24,7 +24,7 @@ De standaarddebugbuild heeft geen signingsecret nodig. De harness maakt een tijd
 - debug-, release- en flavored varianten zonder taaknamen te gokken;
 - Maven alleen wanneer het project werkelijk een `pom.xml` bevat.
 
-De harness gebruikt altijd de Wrapper van de target. Hij werkt Gradle, AGP of bronbestanden niet stilzwijgend bij. Een onbekende of aantoonbaar incompatibele combinatie geeft een gerichte fout met een diagnoserapport.
+De harness gebruikt altijd de versiepin uit de Wrapper-properties van de target. Op GitHub wordt exact die officiële Gradle-distributie geïnstalleerd en gecontroleerd; target-owned Wrapper-JAR-code wordt daar niet uitgevoerd. Daardoor kan ook een beschadigde Wrapper-JAR veilig worden omzeild zonder Gradle, AGP of bronbestanden stilzwijgend bij te werken. Een onbekende of aantoonbaar incompatibele combinatie geeft een gerichte fout met een diagnoserapport.
 
 ## Release-APK ondertekenen
 

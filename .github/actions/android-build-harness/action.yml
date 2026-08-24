@@ -248,6 +248,25 @@ runs:
       with:
         gradle-version: ${{ steps.doctor.outputs.gradle-version }}
         cache-provider: basic
+        # The harness executes this official distribution, not target-owned
+        # Wrapper JAR code. The exact version still comes from Wrapper properties.
+        validate-wrappers: false
+
+    - name: Verify official Gradle matches the target pin
+      shell: bash
+      env:
+        EXPECTED_GRADLE_VERSION: ${{ steps.doctor.outputs.gradle-version }}
+      run: |
+        set -Eeuo pipefail
+        gradle_path="$(command -v gradle)"
+        [[ -x "$gradle_path" ]] || { echo "::error title=Gradle unavailable::setup-gradle did not expose an executable"; exit 2; }
+        actual_version="$($gradle_path --version | awk '/^Gradle / { print $2; exit }')"
+        if [[ "$actual_version" != "$EXPECTED_GRADLE_VERSION" ]]; then
+          echo "::error title=Gradle pin mismatch::Wrapper properties require $EXPECTED_GRADLE_VERSION but setup-gradle exposed $actual_version"
+          exit 2
+        fi
+        echo "HARNESS_GRADLE_COMMAND=$gradle_path" >>"$GITHUB_ENV"
+        "$gradle_path" --version | tee "$HARNESS_LOG_DIR/gradle-version.log"
 
     - name: Verify Maven only for Maven auxiliary projects
       if: ${{ steps.doctor.outputs.has-pom == 'true' }}
@@ -272,6 +291,7 @@ runs:
           --project "$HARNESS_PROJECT_ROOT" \
           --report "$HARNESS_REPORT_DIR/environment.json" \
           --tasks-file "$HARNESS_REPORT_DIR/gradle-tasks.txt" \
+          --gradle-command "$HARNESS_GRADLE_COMMAND" \
           --resolve-tasks
 
     - name: Build, test, and lint selected variants

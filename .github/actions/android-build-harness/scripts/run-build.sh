@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
-# Execute a target Android project's own Gradle Wrapper without changing its
-# source or build configuration.  Every task is selected from `gradlew tasks
-# --all`; task names are never guessed.
+# Execute the Gradle version pinned by a target Android project's Wrapper
+# properties without changing its source or build configuration. In GitHub
+# Actions, ANDROID_HARNESS_GRADLE_COMMAND points to the matching official
+# setup-gradle distribution, so target-owned Wrapper JAR code is not executed.
+# Every task is selected from `tasks --all`; names are never guessed.
 
 set +x
 set -uo pipefail
@@ -30,6 +32,10 @@ ANDROID_RELEASE_KEYSTORE may be used instead of the base64 variable when it
 names an existing keystore file.  Optional custom debug signing accepts the
 corresponding ANDROID_DEBUG_* variables.  Secrets are never placed in command
 arguments or retained in reports.
+
+ANDROID_HARNESS_GRADLE_COMMAND may point to a trusted executable installed at
+the exact version from gradle-wrapper.properties. If unset, local use falls
+back to the target Wrapper.
 EOF
 }
 
@@ -153,6 +159,7 @@ PY
 }
 
 GRADLE_WRAPPER="$PROJECT/gradlew"
+GRADLE_COMMAND=${ANDROID_HARNESS_GRADLE_COMMAND:-}
 OVERALL=0
 DISCOVERY_STATUS=not_run
 RELEASE_SIGNING_STATUS=not_requested
@@ -163,7 +170,14 @@ DEBUG_GRADLE_HOME=""
 KEYTOOL_BIN=${ANDROID_HARNESS_KEYTOOL:-}
 if [[ -z $KEYTOOL_BIN ]]; then KEYTOOL_BIN=$(command -v keytool || true); fi
 
-if [[ ! -f "$GRADLE_WRAPPER" ]]; then
+if [[ -n $GRADLE_COMMAND ]]; then
+  GRADLE_COMMAND=$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$GRADLE_COMMAND")
+  if [[ ! -f $GRADLE_COMMAND || ! -x $GRADLE_COMMAND ]]; then
+    echo "Trusted Gradle executable does not exist or is not executable: $GRADLE_COMMAND" >&2
+    OVERALL=1
+    DISCOVERY_STATUS=failed
+  fi
+elif [[ ! -f "$GRADLE_WRAPPER" ]]; then
   echo "Target project has no Gradle Wrapper at $GRADLE_WRAPPER" >&2
   OVERALL=1
   DISCOVERY_STATUS=failed
@@ -174,8 +188,10 @@ run_wrapper_capture() {
   shift 3
   local raw="$RUNTIME_DIR/raw-$(python3 -c 'import secrets; print(secrets.token_hex(8))').log"
   local rc
-  echo "Running target Gradle Wrapper: $label"
-  if [[ -x "$GRADLE_WRAPPER" ]]; then
+  echo "Running target-pinned Gradle: $label"
+  if [[ -n $GRADLE_COMMAND ]]; then
+    if (cd "$PROJECT" && GRADLE_USER_HOME="$gradle_home" "$GRADLE_COMMAND" "$@") >"$raw" 2>&1; then rc=0; else rc=$?; fi
+  elif [[ -x "$GRADLE_WRAPPER" ]]; then
     if (cd "$PROJECT" && GRADLE_USER_HOME="$gradle_home" "$GRADLE_WRAPPER" "$@") >"$raw" 2>&1; then rc=0; else rc=$?; fi
   else
     if (cd "$PROJECT" && GRADLE_USER_HOME="$gradle_home" bash "$GRADLE_WRAPPER" "$@") >"$raw" 2>&1; then rc=0; else rc=$?; fi

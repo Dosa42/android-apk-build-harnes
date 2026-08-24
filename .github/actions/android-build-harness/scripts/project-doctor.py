@@ -76,7 +76,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--project", required=True, type=Path, help="Target Android checkout root")
     parser.add_argument("--report", required=True, type=Path, help="JSON report path outside the target checkout")
     parser.add_argument("--tasks-file", type=Path, help="Full Gradle task-list log path outside the target checkout")
-    parser.add_argument("--resolve-tasks", action="store_true", help="Run the Wrapper's tasks --all command and resolve real variants")
+    parser.add_argument(
+        "--gradle-command",
+        type=Path,
+        help="Trusted Gradle executable already installed at the exact Wrapper-pinned version",
+    )
+    parser.add_argument(
+        "--resolve-tasks",
+        action="store_true",
+        help="Run tasks --all with the trusted pinned Gradle command (or local Wrapper fallback) and resolve variants",
+    )
     parser.add_argument("--github-output", type=Path, help="GitHub output file; defaults to GITHUB_OUTPUT")
     return parser.parse_args()
 
@@ -486,9 +495,19 @@ def canonical_task(token: str) -> str:
 
 
 def discover_tasks(
-    project: Path, wrapper: Path, application_modules: list[dict[str, Any]], tasks_file: Path
+    project: Path,
+    wrapper: Path,
+    application_modules: list[dict[str, Any]],
+    tasks_file: Path,
+    gradle_command: Path | None,
 ) -> tuple[dict[str, list[str]], list[str], list[str]]:
-    command = ["bash", str(wrapper), "--no-daemon", "--console=plain", "--stacktrace", "tasks", "--all"]
+    if gradle_command is not None:
+        executable = resolved(gradle_command)
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            raise DoctorError(f"Trusted Gradle executable is missing or not executable: {executable}")
+        command = [str(executable), "--no-daemon", "--console=plain", "--stacktrace", "tasks", "--all"]
+    else:
+        command = ["bash", str(wrapper), "--no-daemon", "--console=plain", "--stacktrace", "tasks", "--all"]
     before = {item["build_file"]: sha256(Path(item["build_file"])) for item in application_modules}
     process = subprocess.run(
         command,
@@ -576,6 +595,7 @@ def create_report(args: argparse.Namespace) -> dict[str, Any]:
     resolved_tasks_file = ensure_output_outside_project(tasks_file, project, "Tasks file") if tasks_file else None
 
     gradle_version, distribution_url, wrapper_properties = wrapper_version(project)
+    wrapper_jar = project / "gradle" / "wrapper" / "gradle-wrapper.jar"
     catalogs, plugin_aliases, catalog_paths = load_catalogs(project)
     values = parse_properties(project, catalogs)
     files = gradle_files(project)
@@ -612,9 +632,17 @@ def create_report(args: argparse.Namespace) -> dict[str, Any]:
     variants: list[str] = []
     task_command: list[str] | None = None
     if args.resolve_tasks and resolved_tasks_file:
-        tasks, variants, task_command = discover_tasks(project, project / "gradlew", application_modules, resolved_tasks_file)
+        tasks, variants, task_command = discover_tasks(
+            project,
+            project / "gradlew",
+            application_modules,
+            resolved_tasks_file,
+            args.gradle_command,
+        )
 
-    inspected = sorted(set([wrapper_properties, *catalog_paths, *files, *(Path(item["build_file"]) for item in application_modules)]))
+    inspected = sorted(
+        set([wrapper_properties, wrapper_jar, *catalog_paths, *files, *(Path(item["build_file"]) for item in application_modules)])
+    )
     poms = locate_poms(project)
     report: dict[str, Any] = {
         "schema_version": 1,
@@ -624,6 +652,9 @@ def create_report(args: argparse.Namespace) -> dict[str, Any]:
             "version": gradle_version,
             "distribution_url": distribution_url,
             "wrapper_properties": str(wrapper_properties),
+            "wrapper_jar": str(wrapper_jar),
+            "wrapper_jar_sha256": sha256(wrapper_jar),
+            "wrapper_jar_executed": bool(args.resolve_tasks and args.gradle_command is None),
             "minimum_for_agp": compatibility.minimum_gradle,
         },
         "android_gradle_plugin": {

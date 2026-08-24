@@ -125,6 +125,48 @@ class ProjectDoctorTests(unittest.TestCase):
             after = hashlib.sha256((project / "gradle/wrapper/gradle-wrapper.properties").read_bytes()).hexdigest()
             self.assertEqual(before, after)
 
+    def test_task_discovery_can_use_a_trusted_pinned_gradle_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            project = base / "target"
+            android_project(project)
+            write(project / "gradle/wrapper/gradle-wrapper.jar", b"corrupted wrapper bytes")
+            trusted_gradle = base / "tools" / "gradle"
+            write(
+                trusted_gradle,
+                """
+                #!/usr/bin/env bash
+                printf '%s\n' \
+                  ':app:assembleDebug - Assemble debug APK' \
+                  ':app:assembleRelease - Assemble release APK' \
+                  ':app:lintDebug - Run debug lint' \
+                  ':app:testDebugUnitTest - Run debug tests'
+                """,
+            )
+            trusted_gradle.chmod(0o755)
+            report = base / "out" / "environment.json"
+            tasks = base / "out" / "gradle-tasks.txt"
+            result = run(
+                [
+                    sys.executable,
+                    str(DOCTOR),
+                    "--project",
+                    str(project),
+                    "--report",
+                    str(report),
+                    "--tasks-file",
+                    str(tasks),
+                    "--gradle-command",
+                    str(trusted_gradle),
+                    "--resolve-tasks",
+                ]
+            )
+            self.assertEqual(result.returncode, 0, result.stdout)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(data["variants"], ["debug", "release"])
+            self.assertEqual(data["task_discovery"]["command"][0], str(trusted_gradle))
+            self.assertFalse(data["gradle"]["wrapper_jar_executed"])
+
 
 class ArtifactVerificationTests(unittest.TestCase):
     def verifier_env(self) -> dict[str, str]:
@@ -291,6 +333,7 @@ class BuildRunnerTests(unittest.TestCase):
                 exit 0
                 """,
             )
+            (project / "gradlew").chmod(0o755)
             result = run(
                 [
                     "bash",
@@ -303,7 +346,8 @@ class BuildRunnerTests(unittest.TestCase):
                     str(output),
                     "--skip-tests",
                     "--skip-lint",
-                ]
+                ],
+                env={**os.environ, "ANDROID_HARNESS_GRADLE_COMMAND": str(project / "gradlew")},
             )
             self.assertEqual(result.returncode, 0, result.stdout)
             self.assertFalse((project / "debug.keystore").exists())
