@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - codex-embedded-source-build-20260827
+    paths:
+      - workbench/chunks/part-000
 
 permissions:
   contents: read
