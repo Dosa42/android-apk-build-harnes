@@ -69,7 +69,8 @@ jobs:
           cp -a "${GRADLE_USER_HOME}" "${package_root}/gradle-home"
           find "${package_root}/gradle-home" -type f -name '*.lock' -delete
           mkdir -p artifact
-          tar -C "${RUNNER_TEMP}" -czf artifact/codex-android-toolchain.tar.gz codex-android-toolchain
+          tar -C "${RUNNER_TEMP}" -czf "${RUNNER_TEMP}/codex-android-toolchain.tar.gz" codex-android-toolchain
+          split -b 400M -d -a 2 "${RUNNER_TEMP}/codex-android-toolchain.tar.gz" artifact/toolchain-part-
           cp target/app/build/outputs/apk/debug/app-debug.apk artifact/remote-reference-app-debug.apk
           {
             java -version
@@ -79,10 +80,36 @@ jobs:
             sha256sum reconstructed-project.zip
           } > artifact/toolchain-manifest.txt 2>&1
 
-      - name: Upload local toolchain
+      - name: Upload toolchain part 00
         uses: actions/upload-artifact@v7
         with:
-          name: codex-local-toolchain-and-apk
-          path: artifact/*
+          name: codex-local-toolchain-part-00
+          path: artifact/toolchain-part-00
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload toolchain part 01
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-local-toolchain-part-01
+          path: artifact/toolchain-part-01
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload toolchain part 02
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-local-toolchain-part-02
+          path: artifact/toolchain-part-02
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload reference APK and manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-reference-apk-and-manifest
+          path: |
+            artifact/remote-reference-app-debug.apk
+            artifact/toolchain-manifest.txt
           compression-level: 0
           retention-days: 7
