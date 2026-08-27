@@ -39,8 +39,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cat workbench/chunks/part-* | base64 --decode > reconstructed-project.zip
+          echo "7e6d4456ab69c27b6a74b0317b5e8f6adaae9498d5cb4891097b4e1fc8823284  reconstructed-project.zip" | sha256sum --check
           mkdir -p target
-          unzip -q workbench/project-upload.zip -d target
+          unzip -q reconstructed-project.zip -d target
           chmod +x target/gradlew
 
       - name: Prime exact Gradle dependency cache and assemble
@@ -74,7 +76,7 @@ jobs:
             target/gradlew --version
             echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
             sha256sum artifact/remote-reference-app-debug.apk
-            sha256sum workbench/project-upload.zip
+            sha256sum reconstructed-project.zip
           } > artifact/toolchain-manifest.txt 2>&1
 
       - name: Upload local toolchain
