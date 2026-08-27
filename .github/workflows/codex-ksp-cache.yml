@@ -1,0 +1,36 @@
+name: Recover exact KSP dependency
+
+on:
+  push:
+    branches:
+      - codex-embedded-source-build-20260827
+    paths:
+      - .github/workflows/codex-ksp-cache.yml
+
+permissions:
+  contents: read
+
+jobs:
+  recover-ksp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download and verify exact KSP implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          curl --fail --location --retry 3 \
+            https://repo1.maven.org/maven2/com/google/devtools/ksp/symbol-processing-aa-embeddable/2.3.5/symbol-processing-aa-embeddable-2.3.5.jar \
+            --output artifact/symbol-processing-aa-embeddable-2.3.5.jar
+          echo "dd87d7bd94c7b3d0933b77b0d080dd17408b9aec  artifact/symbol-processing-aa-embeddable-2.3.5.jar" | sha1sum --check
+          unzip -tqq artifact/symbol-processing-aa-embeddable-2.3.5.jar
+          sha256sum artifact/symbol-processing-aa-embeddable-2.3.5.jar > artifact/sha256.txt
+
+      - name: Upload verified KSP dependency
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-ksp-2.3.5
+          path: artifact/*
+          compression-level: 0
+          retention-days: 7
